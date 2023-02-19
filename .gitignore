@@ -43,4 +43,4 @@ nb-configuration.xml
 
 # YouTube
 src/main/resources/youtube/credentials/client_secrets.json
-src/main/resources/youtube/playlist/youtube.json
+src/main/resources/youtube/playlist/*.json
