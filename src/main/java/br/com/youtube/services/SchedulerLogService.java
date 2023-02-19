@@ -15,14 +15,18 @@ public class SchedulerLogService {
     @Inject
     SchedulerLogRepository repository;
 
+    public SchedulerLog findLastByType(SchedulerLog.Type type) {
+        return this.repository.findLastByType(type);
+    }
+
     @Transactional
-    public Long logStart(SchedulerLog.Type type) {
+    public SchedulerLog logStart(SchedulerLog.Type type) {
         SchedulerLog schedulerLog = new SchedulerLog();
         schedulerLog.setExecutionStart(new Date());
         schedulerLog.setType(type);
         this.repository.persist(schedulerLog);
 
-        return schedulerLog.getId();
+        return schedulerLog;
     }
 
     @Transactional

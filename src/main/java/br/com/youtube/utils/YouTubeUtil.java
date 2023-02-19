@@ -3,8 +3,12 @@ package br.com.youtube.utils;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp;
@@ -19,8 +23,11 @@ import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.client.util.store.DataStoreFactory;
 import com.google.api.client.util.store.FileDataStoreFactory;
 import com.google.api.services.youtube.YouTube;
+import com.google.api.services.youtube.model.Channel;
+import com.google.api.services.youtube.model.ChannelListResponse;
 import com.google.api.services.youtube.model.Playlist;
 import com.google.api.services.youtube.model.PlaylistItem;
+import com.google.api.services.youtube.model.PlaylistItemListResponse;
 import com.google.api.services.youtube.model.PlaylistItemSnippet;
 import com.google.api.services.youtube.model.PlaylistSnippet;
 import com.google.api.services.youtube.model.PlaylistStatus;
@@ -88,6 +95,139 @@ public class YouTubeUtil {
 
         // Authorize.
         return new AuthorizationCodeInstalledApp(flow, localReceiver).authorize("user");
+    }
+
+    /**
+     * Authorizes user and list channels by the list of IDs.
+     *
+     * @param ids list of channel IDs.
+     */
+    public static List<Channel> getChannelsByIdList(String ids) {
+        // General read/write scope for YouTube APIs.
+        List<String> scopes = Lists.newArrayList("https://www.googleapis.com/auth/youtube.readonly");
+
+        // Authorization.
+        try {
+            // Authorization.
+            Credential credential = authorize(scopes);
+
+            // YouTube object used to make all API requests.
+            youtube = new YouTube.Builder(HTTP_TRANSPORT, JSON_FACTORY, credential)
+                    .setApplicationName("youtube-cmdline-playlistupdates-sample")
+                    .build();
+
+            // Define a list to store items in the list of channels.
+            List<Channel> channelList = new ArrayList<Channel>();
+
+            // Create request, filter by IDs and execute it
+            YouTube.Channels.List channelListRequest = youtube.channels().list("contentDetails");
+            channelListRequest.setId(ids);
+
+            String nextToken = "";
+
+            // Call the API one or more times to retrieve all items in the
+            // list. As long as the API response returns a nextPageToken,
+            // there are still more items to retrieve.
+            do {
+                channelListRequest.setPageToken(nextToken);
+                ChannelListResponse channelItemResult = channelListRequest.execute();
+
+                channelList.addAll(channelItemResult.getItems());
+
+                nextToken = channelItemResult.getNextPageToken();
+            } while (nextToken != null);
+
+            // Return the items
+            return channelList;
+        } catch (GoogleJsonResponseException e) {
+            System.err.println(
+                    "There was a service error: " + e.getDetails().getCode() + " : " + e.getDetails().getMessage());
+            e.printStackTrace();
+        } catch (IOException e) {
+            System.err.println("IOException: " + e.getMessage());
+            e.printStackTrace();
+        } catch (Throwable t) {
+            System.err.println("Throwable: " + t.getMessage());
+            t.printStackTrace();
+        }
+
+        return null;
+    }
+
+    /**
+     * Authorizes user and list channels by the list of IDs.
+     *
+     * @param playlistId playlist ID.
+     */
+    public static List<PlaylistItem> getPlaylistItems(String playlistId, Date publishedAfter) {
+        // General read/write scope for YouTube APIs.
+        List<String> scopes = Lists.newArrayList("https://www.googleapis.com/auth/youtube.readonly");
+
+        // Authorization.
+        try {
+            // Authorization.
+            Credential credential = authorize(scopes);
+
+            // YouTube object used to make all API requests.
+            youtube = new YouTube.Builder(HTTP_TRANSPORT, JSON_FACTORY, credential)
+                    .setApplicationName("youtube-cmdline-playlistupdates-sample")
+                    .build();
+
+            // Define a list to store items in the list of uploaded videos.
+            List<PlaylistItem> playlistItemList = new ArrayList<PlaylistItem>();
+
+            // Create request, filter by ID and execute it
+            YouTube.PlaylistItems.List playlistItemRequest = youtube.playlistItems().list("contentDetails");
+            playlistItemRequest.setPlaylistId(playlistId);
+            playlistItemRequest.setMaxResults(5L);
+
+            String nextToken = "";
+
+            // Call the API one or more times to retrieve all items in the
+            // list. As long as the API response returns a nextPageToken,
+            // there are still more items to retrieve.
+            do {
+                playlistItemRequest.setPageToken(nextToken);
+                PlaylistItemListResponse playlistItemResult = playlistItemRequest.execute();
+
+                // playlistItemList.addAll(playlistItemResult.getItems());
+
+                List<PlaylistItem> currentPageItems = playlistItemResult.getItems();
+                currentPageItems = currentPageItems.stream().filter(playlistItem -> {
+                    Date publishedAt = new Date(playlistItem.getContentDetails().getVideoPublishedAt().getValue());
+                    // long diffInMinutes = TimeUnit.MINUTES.convert(publishedAfter.getTime() -
+                    // publishedAt.getTime(),
+                    // TimeUnit.MILLISECONDS);
+                    // return diffInMinutes <= 0;
+                    return publishedAt.after(publishedAfter) || publishedAt.equals(publishedAfter);
+                }).collect(Collectors.toList());
+
+                // Add items to playlist
+                playlistItemList.addAll(currentPageItems);
+
+                // Check if is full page to make more requests
+                if (currentPageItems.size() == 5) {
+                    nextToken = playlistItemResult.getNextPageToken();
+                } else {
+                    nextToken = null;
+                }
+
+            } while (nextToken != null);
+
+            return playlistItemList;
+        } catch (GoogleJsonResponseException e) {
+            System.err.println(
+                    "There was a service error: " + e.getDetails().getCode() + " : " + e.getDetails().getMessage());
+            e.printStackTrace();
+        } catch (IOException e) {
+            System.err.println("IOException: " + e.getMessage());
+            e.printStackTrace();
+        } catch (Throwable t) {
+            System.err.println("Throwable: " + t.getMessage());
+            t.printStackTrace();
+        }
+
+        return null;
     }
 
     /**
@@ -185,7 +325,7 @@ public class YouTubeUtil {
      * @param playlistId assign to newly created playlistitem
      * @param videoId    YouTube video id to add to playlistitem
      */
-    private static String insertPlaylistItem(String playlistId, String videoId) throws IOException {
+    public static String insertPlaylistItem(String playlistId, String videoId) throws IOException {
         /*
          * The Resource type (video,playlist,channel) needs to be set along with the
          * resource id. In

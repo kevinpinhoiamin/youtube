@@ -12,5 +12,5 @@ repos:
     hooks:
       - id: hide-secrets
         name: hide-secrets
-        entry: bash -c 'git secret hide && git add *.secret'
+        entry: bash -c 'git secret hide && git add *.secret && git add .gitsecret'
         language: system
